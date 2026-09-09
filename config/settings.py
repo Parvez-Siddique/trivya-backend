@@ -31,7 +31,13 @@ SECRET_KEY = 'django-insecure-7nbd1bbk!1p08lo@i=dfje43p9dw7=^iautnk!#(0!c82xfg6v
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+CORS_ALLOWED_ORIGINS = [
+    "https://trivyacare.com"
+]
+
+ALLOWED_HOSTS = [
+    "trivya-backend-production.up.railway.app"
+]
 
 
 # Application definition
