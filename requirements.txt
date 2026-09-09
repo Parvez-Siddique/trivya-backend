@@ -1,0 +1,8 @@
+Django==6.1
+djangorestframework
+django-rest-knox
+django-cors-headers
+psycopg[binary]
+Pillow
+gunicorn
+python-dotenv
