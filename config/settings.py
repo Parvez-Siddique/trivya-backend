@@ -33,10 +33,13 @@ DEBUG = True
 
 CORS_ALLOWED_ORIGINS = [
     "https://trivyacare.com"
+    "http://localhost:3000",
 ]
 
 ALLOWED_HOSTS = [
     "trivya-backend-production.up.railway.app"
+    "localhost",
+    "127.0.0.1",
 ]
 
 
@@ -50,7 +53,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'trivyaserver',
-
     'rest_framework',
     'knox'
 ]

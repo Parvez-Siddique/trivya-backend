@@ -31,7 +31,7 @@ class AdminLogin(APIView):
         # Authenticate user
         user = authenticate(
             request=request,
-            username=username,
+            email=username,
             password=password
         )
 
@@ -83,7 +83,6 @@ class UserCreateView(APIView):
         serializer = UserSerializer(data=request.data)
 
         if not serializer.is_valid():
-            print(serializer.errors, "SERIALIZER_ERRORS")
 
             return Response(
                 serializer.errors,

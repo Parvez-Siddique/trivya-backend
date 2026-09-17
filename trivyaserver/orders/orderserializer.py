@@ -1,6 +1,6 @@
 
 from rest_framework import serializers
-from ..models import Order, Product, OrderDet
+from ..models import Order, OrderDet, User
 
 class CreateOrderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -50,11 +50,38 @@ class CustomerOrderListSerializer(serializers.ModelSerializer):
     order_details = CustomerOrderDetailSerializer(many=True, read_only=True)
 
     def get_customer_name(self, obj):
-        return f"{obj.user.first_name} {obj.user.last_name}".strip()
+        return f"{obj.user.firstName} {obj.user.lastName}".strip()
 
     class Meta:
         model = Order
-        fields = ["id", "order_code", "payment_status",
+        fields = ["id", "order_code", "payment_status", "order_status",
             "customer_name", "total_quantity", "total_price",
             "order_details", "created_at", "updated_at"
         ]
+
+
+class CreateCustomerSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = User
+
+        fields = [ "firstName", "lastName", "email", "phoneNumber", 
+                  "user_type", "streetName", "area", "city", "state", "pincode"]
+
+    def create(self, validated_data): 
+        user = User( **validated_data ) 
+        user.save() 
+        return user
+
+
+class UpdateOrderStatusSerializer(serializers.Serializer):
+
+    order_id = serializers.IntegerField()
+
+    payment_status = serializers.CharField(
+        max_length=20
+    )
+
+    order_status = serializers.CharField(
+        max_length=20
+    )
