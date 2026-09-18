@@ -29,8 +29,8 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 CORS_ALLOWED_ORIGINS = [
-    "https://trivyacare.com"
-    "http://localhost:3000",
+    "https://trivyacare.com",
+    "http://localhost:3000"
 ]
 
 ALLOWED_HOSTS = [
