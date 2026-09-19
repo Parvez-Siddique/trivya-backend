@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["sh", "-c", "echo '=== DJANGO STARTING ===' && echo \"PORT=$PORT\" && echo \"HOST=$DATABASE_HOST\" && python manage.py check && echo '=== CHECK PASSED ===' && exec python manage.py runserver 0.0.0.0:$PORT --noreload"]
+CMD ["sh", "-c", "python manage.py check && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT}"]
