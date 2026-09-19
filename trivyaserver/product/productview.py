@@ -193,6 +193,6 @@ class ProductPublicListViewAPI(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        products = Product.objects.all().order_by("id")
+        products = Product.objects.filter(isActive=True).order_by("id")
         serializer = ProductListSerializer(products, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
