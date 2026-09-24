@@ -5,8 +5,7 @@ from ..models import Order, User, UserDetails
 from .orderserializer import CreateOrderSerializer, CustomerOrderListSerializer, CreateOrderDetSerializer, CreateCustomerSerializer, UpdateOrderStatusSerializer
 from django.db import transaction
 from django.db.models import Q
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from knox.auth import TokenAuthentication
+from rest_framework.permissions import AllowAny
 
 def generate_order_code():
     last_order = Order.objects.order_by("-order_code_count").first()
@@ -88,6 +87,8 @@ class PlaceOrderView(APIView):
         customer_data = request.data.get("customer_data")
         order_data = request.data.get("order_data")
 
+        print(customer_data,order_data,"REQUIREDDATATATATATAT")
+
         if not customer_data:
             return Response(
                 {"status": "FAILED"},
@@ -103,10 +104,6 @@ class PlaceOrderView(APIView):
         customer_email = customer_data.get("email")
         customer_phone = customer_data.get("phoneNumber")
 
-        # --------------------------------------------------
-        # Find existing customer
-        # --------------------------------------------------
-
         fetch_user_data = User.objects.filter(
             user_type="CUSTOMER"
         ).filter(
@@ -114,17 +111,9 @@ class PlaceOrderView(APIView):
             Q(phoneNumber=customer_phone)
         ).first()
 
-        # --------------------------------------------------
-        # Existing customer
-        # --------------------------------------------------
-
         if fetch_user_data:
 
             user_id = fetch_user_data.id
-
-            # ----------------------------------------------
-            # Update phone if it is different
-            # ----------------------------------------------
 
             if (
                 customer_phone
@@ -146,10 +135,6 @@ class PlaceOrderView(APIView):
 
                 fetch_user_data.phoneNumber = customer_phone
 
-            # ----------------------------------------------
-            # Update email if it is different
-            # ----------------------------------------------
-
             if (
                 customer_email
                 and fetch_user_data.email != customer_email
@@ -170,15 +155,8 @@ class PlaceOrderView(APIView):
 
                 fetch_user_data.email = customer_email
 
-            # ----------------------------------------------
-            # Save changes
-            # ----------------------------------------------
 
             fetch_user_data.save()
-
-        # --------------------------------------------------
-        # New customer
-        # --------------------------------------------------
 
         else:
 
@@ -197,10 +175,6 @@ class PlaceOrderView(APIView):
 
             user_id = new_user.id
 
-        # --------------------------------------------------
-        # Add user to order
-        # --------------------------------------------------
-
         order_data["user"] = user_id
 
         order_details_data = order_data.get(
@@ -208,13 +182,8 @@ class PlaceOrderView(APIView):
             []
         )
 
-        # --------------------------------------------------
-        # Validate order
-        # --------------------------------------------------
 
-        order_serializer = CreateOrderSerializer(
-            data=order_data
-        )
+        order_serializer = CreateOrderSerializer(data=order_data)
 
         if not order_serializer.is_valid():
 
@@ -223,9 +192,6 @@ class PlaceOrderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # --------------------------------------------------
-        # Create order
-        # --------------------------------------------------
 
         try:
 
@@ -262,10 +228,6 @@ class PlaceOrderView(APIView):
                         )
 
                     order_detail_serializer.save()
-
-            # ----------------------------------------------
-            # Success
-            # ----------------------------------------------
 
             return Response(
                 {"status": "SUCCESS"},

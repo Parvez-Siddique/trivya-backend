@@ -17,7 +17,7 @@ class CreateOrderDetSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderDet
         fields = ['id', 'order', 'product', 'quantity',
-                   'price', 'created_at', 'updated_at']
+                   'price', 'product_size', 'created_at', 'updated_at']
 
 
 class CustomerOrderDetailSerializer(serializers.ModelSerializer):
@@ -41,7 +41,7 @@ class CustomerOrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderDet
         fields = ["id", "product", "product_name",
-            "product_image", "quantity", "price",
+            "product_image", "quantity", "price", "product_size",
             "created_at", "updated_at"]
 
 class CustomerOrderListSerializer(serializers.ModelSerializer):
