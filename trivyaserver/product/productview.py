@@ -131,102 +131,6 @@ class ProductCreateView(APIView):
             status=status.HTTP_200_OK
         )
 
-class ProductUpdateView(APIView):
-
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        product_id = request.query_params.get("product_id")
-
-        if not product_id:
-            return Response(
-                {
-                    "status": "ERROR",
-                    "error": "Product ID is required"
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            product = Product.objects.get(pk=product_id)
-
-        except Product.DoesNotExist:
-            return Response(
-                {
-                    "status": "ERROR",
-                    "error": "Product not found"
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        serializer = ProductDetailSerializer(
-            product,
-            context={"request": request}
-        )
-
-        return Response(
-            {
-                "status": "SUCCESS",
-                "data": serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
-
-    def put(self, request):
-        product_id = request.query_params.get("product_id")
-
-        if not product_id:
-            return Response(
-                {
-                    "status": "ERROR",
-                    "error": "Product ID is required"
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            product = Product.objects.get(pk=product_id)
-
-        except Product.DoesNotExist:
-            return Response(
-                {
-                    "status": "ERROR",
-                    "error": "Product not found"
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        serializer = ProductUpdateSerializer(
-            product,
-            data=request.data,
-            partial=True,
-            context={"request": request}
-        )
-
-        if not serializer.is_valid():
-            return Response(
-                {
-                    "status": "ERROR",
-                    "errors": serializer.errors
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        product = serializer.save()
-
-        return Response(
-            {
-                "status": "SUCCESS",
-                "message": "Product updated successfully",
-                "data": ProductDetailSerializer(
-                    product,
-                    context={"request": request}
-                ).data
-            },
-            status=status.HTTP_200_OK
-        )
-
 class ProductStatusChangeView(APIView):
 
     authentication_classes = [TokenAuthentication]
@@ -360,10 +264,15 @@ class ProductUpdateView(APIView):
             )
 
         product_data = request.data.get("product_data")
+
         product_variation_data = request.data.get(
             "product_variation_data",
             []
         )
+
+        # --------------------------------
+        # Parse JSON data
+        # --------------------------------
 
         if isinstance(product_data, str):
             product_data = json.loads(product_data)
@@ -371,12 +280,16 @@ class ProductUpdateView(APIView):
         if isinstance(product_variation_data, str):
             product_variation_data = json.loads(product_variation_data)
 
+        # --------------------------------
+        # Update Product
+        # --------------------------------
+
         product_image = request.FILES.get("product_image")
 
-        if product_image:
-            product_data["product_image"] = product_image
-
         if product_data is not None:
+
+            if product_image:
+                product_data["product_image"] = product_image
 
             product_serializer = ProductUpdateSerializer(
                 product,
@@ -397,6 +310,10 @@ class ProductUpdateView(APIView):
 
             product = product_serializer.save()
 
+        # --------------------------------
+        # Existing variation IDs
+        # --------------------------------
+
         existing_variation_ids = set(
             product.product_details.values_list(
                 "id",
@@ -406,13 +323,39 @@ class ProductUpdateView(APIView):
 
         submitted_variation_ids = set()
 
-        for variation in product_variation_data:
+        # --------------------------------
+        # Process variations
+        # --------------------------------
+
+        for index, variation in enumerate(product_variation_data):
+
+            variation_number = index + 1
+
+            # --------------------------------
+            # Get variation images
+            # --------------------------------
+
+            variation_image_one = request.FILES.get(
+                f"variation_{variation_number}_variation_image_one"
+            )
+
+            variation_image_two = request.FILES.get(
+                f"variation_{variation_number}_variation_image_two"
+            )
+
+            variation_image_three = request.FILES.get(
+                f"variation_{variation_number}_variation_image_three"
+            )
+
+            variation_image_four = request.FILES.get(
+                f"variation_{variation_number}_variation_image_four"
+            )
 
             variation_id = variation.get("id")
 
-            # -------------------------
-            # UPDATE EXISTING
-            # -------------------------
+            # =================================
+            # UPDATE EXISTING VARIATION
+            # =================================
 
             if variation_id:
 
@@ -434,6 +377,10 @@ class ProductUpdateView(APIView):
                         status=status.HTTP_404_NOT_FOUND
                     )
 
+                # -----------------------------
+                # Update normal variation data
+                # -----------------------------
+
                 variation_serializer = ProductVariationSerializer(
                     variation_object,
                     data=variation,
@@ -452,15 +399,41 @@ class ProductUpdateView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                variation_serializer.save()
+                variation_object = variation_serializer.save()
+
+                # -----------------------------
+                # Update images only when sent
+                # -----------------------------
+
+                if variation_image_one:
+                    variation_object.variation_image_one = (
+                        variation_image_one
+                    )
+
+                if variation_image_two:
+                    variation_object.variation_image_two = (
+                        variation_image_two
+                    )
+
+                if variation_image_three:
+                    variation_object.variation_image_three = (
+                        variation_image_three
+                    )
+
+                if variation_image_four:
+                    variation_object.variation_image_four = (
+                        variation_image_four
+                    )
+
+                variation_object.save()
 
                 submitted_variation_ids.add(
                     variation_object.id
                 )
 
-            # -------------------------
-            # CREATE NEW
-            # -------------------------
+            # =================================
+            # CREATE NEW VARIATION
+            # =================================
 
             else:
 
@@ -486,13 +459,39 @@ class ProductUpdateView(APIView):
                     product=product
                 )
 
+                # -----------------------------
+                # Save uploaded images
+                # -----------------------------
+
+                if variation_image_one:
+                    new_variation.variation_image_one = (
+                        variation_image_one
+                    )
+
+                if variation_image_two:
+                    new_variation.variation_image_two = (
+                        variation_image_two
+                    )
+
+                if variation_image_three:
+                    new_variation.variation_image_three = (
+                        variation_image_three
+                    )
+
+                if variation_image_four:
+                    new_variation.variation_image_four = (
+                        variation_image_four
+                    )
+
+                new_variation.save()
+
                 submitted_variation_ids.add(
                     new_variation.id
                 )
 
-        # =============================
+        # =================================
         # DELETE REMOVED VARIATIONS
-        # =============================
+        # =================================
 
         variations_to_delete = (
             existing_variation_ids -
@@ -506,9 +505,9 @@ class ProductUpdateView(APIView):
                 id__in=variations_to_delete
             ).delete()
 
-        # =============================
+        # =================================
         # RESPONSE
-        # =============================
+        # =================================
 
         product.refresh_from_db()
 
@@ -525,6 +524,7 @@ class ProductUpdateView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
 
     @transaction.atomic
     def delete(self, request):

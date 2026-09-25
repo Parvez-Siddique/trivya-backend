@@ -87,8 +87,6 @@ class PlaceOrderView(APIView):
         customer_data = request.data.get("customer_data")
         order_data = request.data.get("order_data")
 
-        print(customer_data,order_data,"REQUIREDDATATATATATAT")
-
         if not customer_data:
             return Response(
                 {"status": "FAILED"},
@@ -235,8 +233,6 @@ class PlaceOrderView(APIView):
             )
 
         except Exception as error:
-
-            print("ORDER CREATION ERROR:", error)
 
             return Response(
                 {"status": "FAILED"},
