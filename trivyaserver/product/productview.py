@@ -270,19 +270,12 @@ class ProductUpdateView(APIView):
             []
         )
 
-        # --------------------------------
-        # Parse JSON data
-        # --------------------------------
-
         if isinstance(product_data, str):
             product_data = json.loads(product_data)
 
         if isinstance(product_variation_data, str):
             product_variation_data = json.loads(product_variation_data)
 
-        # --------------------------------
-        # Update Product
-        # --------------------------------
 
         product_image = request.FILES.get("product_image")
 
@@ -310,22 +303,29 @@ class ProductUpdateView(APIView):
 
             product = product_serializer.save()
 
-        # --------------------------------
-        # Existing variation IDs
-        # --------------------------------
+        existing_variations = ProductDetails.objects.filter(product=product)
 
-        existing_variation_ids = set(
-            product.product_details.values_list(
-                "id",
-                flat=True
-            )
-        )
+        for variation in existing_variations:
 
-        submitted_variation_ids = set()
+            # Delete variation image files
+            if variation.variation_image_one:
+                variation.variation_image_one.delete(save=False)
 
-        # --------------------------------
-        # Process variations
-        # --------------------------------
+            if variation.variation_image_two:
+                variation.variation_image_two.delete(save=False)
+
+            if variation.variation_image_three:
+                variation.variation_image_three.delete(save=False)
+
+            if variation.variation_image_four:
+                variation.variation_image_four.delete(save=False)
+
+            # Delete variation record
+            variation.delete()
+
+        # =================================
+        # CREATE NEW VARIATIONS
+        # =================================
 
         for index, variation in enumerate(product_variation_data):
 
@@ -351,169 +351,51 @@ class ProductUpdateView(APIView):
                 f"variation_{variation_number}_variation_image_four"
             )
 
-            variation_id = variation.get("id")
+            # --------------------------------
+            # Create variation
+            # --------------------------------
 
-            # =================================
-            # UPDATE EXISTING VARIATION
-            # =================================
+            variation_serializer = CreateProductVariationSerializer(
+                data=variation
+            )
 
-            if variation_id:
-
-                try:
-                    variation_object = ProductDetails.objects.get(
-                        id=variation_id,
-                        product=product
-                    )
-
-                except ProductDetails.DoesNotExist:
-                    return Response(
-                        {
-                            "status": "ERROR",
-                            "error": (
-                                f"Product variation "
-                                f"{variation_id} not found"
-                            )
-                        },
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-
-                # -----------------------------
-                # Update normal variation data
-                # -----------------------------
-
-                variation_serializer = ProductVariationSerializer(
-                    variation_object,
-                    data=variation,
-                    partial=True
+            if not variation_serializer.is_valid():
+                return Response(
+                    {
+                        "status": "ERROR",
+                        "errors": {
+                            "variation": variation_serializer.errors
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-                if not variation_serializer.is_valid():
-                    return Response(
-                        {
-                            "status": "ERROR",
-                            "errors": {
-                                "variation":
-                                    variation_serializer.errors
-                            }
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+            new_variation = variation_serializer.save(
+                product=product
+            )
 
-                variation_object = variation_serializer.save()
+            # --------------------------------
+            # Save images
+            # --------------------------------
 
-                # -----------------------------
-                # Update images only when sent
-                # -----------------------------
+            if variation_image_one:
+                new_variation.variation_image_one = variation_image_one
 
-                if variation_image_one:
-                    variation_object.variation_image_one = (
-                        variation_image_one
-                    )
+            if variation_image_two:
+                new_variation.variation_image_two = variation_image_two
 
-                if variation_image_two:
-                    variation_object.variation_image_two = (
-                        variation_image_two
-                    )
+            if variation_image_three:
+                new_variation.variation_image_three = variation_image_three
 
-                if variation_image_three:
-                    variation_object.variation_image_three = (
-                        variation_image_three
-                    )
+            if variation_image_four:
+                new_variation.variation_image_four = variation_image_four
 
-                if variation_image_four:
-                    variation_object.variation_image_four = (
-                        variation_image_four
-                    )
-
-                variation_object.save()
-
-                submitted_variation_ids.add(
-                    variation_object.id
-                )
-
-            # =================================
-            # CREATE NEW VARIATION
-            # =================================
-
-            else:
-
-                variation_serializer = (
-                    CreateProductVariationSerializer(
-                        data=variation
-                    )
-                )
-
-                if not variation_serializer.is_valid():
-                    return Response(
-                        {
-                            "status": "ERROR",
-                            "errors": {
-                                "variation":
-                                    variation_serializer.errors
-                            }
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                new_variation = variation_serializer.save(
-                    product=product
-                )
-
-                # -----------------------------
-                # Save uploaded images
-                # -----------------------------
-
-                if variation_image_one:
-                    new_variation.variation_image_one = (
-                        variation_image_one
-                    )
-
-                if variation_image_two:
-                    new_variation.variation_image_two = (
-                        variation_image_two
-                    )
-
-                if variation_image_three:
-                    new_variation.variation_image_three = (
-                        variation_image_three
-                    )
-
-                if variation_image_four:
-                    new_variation.variation_image_four = (
-                        variation_image_four
-                    )
-
-                new_variation.save()
-
-                submitted_variation_ids.add(
-                    new_variation.id
-                )
-
-        # =================================
-        # DELETE REMOVED VARIATIONS
-        # =================================
-
-        variations_to_delete = (
-            existing_variation_ids -
-            submitted_variation_ids
-        )
-
-        if variations_to_delete:
-
-            ProductDetails.objects.filter(
-                product=product,
-                id__in=variations_to_delete
-            ).delete()
-
-        # =================================
-        # RESPONSE
-        # =================================
+            new_variation.save()
 
         product.refresh_from_db()
 
         serializer = ProductDetailSerializer(
-            product,
-            context={"request": request}
+            product, context={"request": request}
         )
 
         return Response(
@@ -543,6 +425,8 @@ class ProductUpdateView(APIView):
         try:
             product = Product.objects.get(pk=product_id)
 
+            print(product,"DJDHDHDIDJDIJDIJD")
+
         except Product.DoesNotExist:
             return Response(
                 {
@@ -551,6 +435,8 @@ class ProductUpdateView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        print("JOJOJODJDOKDODKODK")
 
         # Because ProductDetails uses PROTECT,
         # delete the details first.
