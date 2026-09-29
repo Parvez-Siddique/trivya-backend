@@ -47,16 +47,47 @@ class CustomerOrderDetailSerializer(serializers.ModelSerializer):
 class CustomerOrderListSerializer(serializers.ModelSerializer):
 
     customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_street = serializers.SerializerMethodField()
+    customer_area = serializers.SerializerMethodField()
+    customer_city = serializers.SerializerMethodField()
+    customer_state = serializers.SerializerMethodField()
+    customer_pincode = serializers.SerializerMethodField()
     order_details = CustomerOrderDetailSerializer(many=True, read_only=True)
 
     def get_customer_name(self, obj):
         return f"{obj.user.firstName} {obj.user.lastName}".strip()
 
+    def get_customer_phone(self, obj):
+                return f"{obj.user.phoneNumber}".strip()
+
+    def get_customer_email(self, obj):
+                    return f"{obj.user.email}".strip()
+
+    def get_customer_street(self, obj):
+                return f"{obj.user.streetName}".strip()
+
+    def get_customer_area(self, obj):
+                return f"{obj.user.area}".strip()
+
+    def get_customer_city(self, obj):
+                return f"{obj.user.city}".strip()
+
+    def get_customer_state(self, obj):
+                return f"{obj.user.state}".strip()
+
+    def get_customer_pincode(self, obj):
+            return f"{obj.user.pincode}".strip()
+
+
     class Meta:
         model = Order
         fields = ["id", "order_code", "payment_status", "order_status",
-            "customer_name", "total_quantity", "total_price",
-            "order_details", "created_at", "updated_at"
+            "customer_name", "customer_phone","customer_email",
+              "total_quantity", "customer_street", "customer_area",
+              "customer_city", "customer_state", "customer_pincode",
+              "total_price", "order_details", "created_at", "updated_at"
         ]
 
 

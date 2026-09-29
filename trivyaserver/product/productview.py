@@ -425,8 +425,6 @@ class ProductUpdateView(APIView):
         try:
             product = Product.objects.get(pk=product_id)
 
-            print(product,"DJDHDHDIDJDIJDIJD")
-
         except Product.DoesNotExist:
             return Response(
                 {
@@ -435,11 +433,6 @@ class ProductUpdateView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND
             )
-
-        print("JOJOJODJDOKDODKODK")
-
-        # Because ProductDetails uses PROTECT,
-        # delete the details first.
         ProductDetails.objects.filter(
             product=product
         ).delete()
