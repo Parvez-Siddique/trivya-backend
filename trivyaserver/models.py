@@ -197,6 +197,12 @@ class Order(models.Model):
 
     order_status = models.CharField(max_length=20, default="PENDING")
 
+    razorpay_order_id = models.CharField(max_length=255, null=True, blank=True)
+
+    razorpay_payment_id = models.CharField(max_length=255, null=True, blank=True)
+
+    payment_signature = models.CharField(max_length=255, null=True, blank=True)
+
     user = models.ForeignKey(User,on_delete=models.CASCADE, related_name="orders")
 
     total_quantity = models.PositiveIntegerField()

@@ -1,11 +1,32 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from ..models import Order, User, UserDetails
+from ..models import Order, User, UserDetails, PaymentGatewayConfig
 from .orderserializer import CreateOrderSerializer, CustomerOrderListSerializer, CreateOrderDetSerializer, CreateCustomerSerializer, UpdateOrderStatusSerializer
 from django.db import transaction
 from django.db.models import Q
 from rest_framework.permissions import AllowAny
+import razorpay
+from django.shortcuts import get_object_or_404
+from decimal import Decimal, ROUND_HALF_UP
+
+def get_razorpay_client():
+
+    config = PaymentGatewayConfig.objects.select_related(
+        "provider"
+    ).get(
+        provider__name__iexact="Razorpay",
+        is_active=True
+    )
+
+    client = razorpay.Client(
+        auth=(
+            config.key_id,
+            config.key_secret
+        )
+    )
+
+    return client, config.key_id
 
 def generate_order_code():
     last_order = Order.objects.order_by("-order_code_count").first()
@@ -45,7 +66,6 @@ class OrderCreateView(APIView):
                             orderDetSerializer.errors,
                             status=status.HTTP_400_BAD_REQUEST
                         )
-
             return Response(
                 {"status": "SUCCESS"},
                 status=status.HTTP_201_CREATED
@@ -228,7 +248,7 @@ class PlaceOrderView(APIView):
                     order_detail_serializer.save()
 
             return Response(
-                {"status": "SUCCESS"},
+                {"status": "SUCCESS", "order_id": order.id, "order_code": order.order_code},
                 status=status.HTTP_201_CREATED
             )
 
@@ -304,3 +324,277 @@ class UpdateOrderStatus(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class CreatePaymentView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        order_id = request.data.get("order_id")
+
+        print(f"Received order_id: {order_id}")
+
+        if not order_id:
+            return Response(
+                {"error": "Order ID is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        order = get_object_or_404(
+            Order,
+            id=order_id
+        )
+
+        print(f"Order found: {order}")
+
+        if order.payment_status == "SUCCESS":
+            return Response(
+                {"error": "Order already paid"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount = int(
+            (order.total_price * Decimal("100")).quantize(
+                Decimal("1"),
+                rounding=ROUND_HALF_UP
+            )
+        )
+
+        print(f"Calculated amount in paise: {amount}")
+
+        if amount <= 0:
+            return Response(
+                {"error": "Invalid payment amount"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+
+            razorpay_client, key_id = get_razorpay_client()
+
+            if not order.razorpay_order_id:
+
+                razorpay_order = razorpay_client.order.create({
+                    "amount": amount,
+                    "currency": "INR",
+                    "receipt": order.order_code
+                })
+
+                order.razorpay_order_id = razorpay_order["id"]
+
+                order.save(update_fields=[
+                    "razorpay_order_id",
+                    "updated_at"
+                ])
+
+            return Response({
+                "status": "SUCCESS",
+                "key": key_id,
+                "razorpay_order_id": order.razorpay_order_id,
+                "amount": amount,
+                "currency": "INR",
+                "order_code": order.order_code
+            }, status=status.HTTP_200_OK)
+
+        except PaymentGatewayConfig.DoesNotExist:
+
+            return Response(
+                {"error": "Razorpay configuration not found"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except PaymentGatewayConfig.MultipleObjectsReturned:
+
+            return Response(
+                {"error": "Multiple active Razorpay configurations found"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        except Exception:
+
+            return Response(
+                {"error": "Unable to initiate payment"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+class VerifyPaymentView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        order_id = request.data.get("order_id")
+        razorpay_order_id = request.data.get("razorpay_order_id")
+        razorpay_payment_id = request.data.get("razorpay_payment_id")
+        razorpay_signature = request.data.get("razorpay_signature")
+
+        # 1. Validate required fields
+        if not all([
+            order_id,
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature
+        ]):
+            return Response(
+                {
+                    "status": "FAILED",
+                    "error": "All payment details are required"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            razorpay_client, key_id = get_razorpay_client()
+
+            # 2. Lock the application order
+            with transaction.atomic():
+
+                order = Order.objects.select_for_update().get(
+                    id=order_id
+                )
+
+                # 3. Prevent verification against another Razorpay order
+                if order.razorpay_order_id != razorpay_order_id:
+                    return Response(
+                        {
+                            "status": "FAILED",
+                            "error": "Razorpay order ID mismatch"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 4. Handle duplicate verification requests
+                if order.payment_status == "SUCCESS":
+                    if order.razorpay_payment_id == razorpay_payment_id:
+                        return Response({
+                            "status": "SUCCESS",
+                            "message": "Payment already verified",
+                            "order_code": order.order_code
+                        })
+
+                    return Response(
+                        {
+                            "status": "FAILED",
+                            "error": "This order has already been paid"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 5. Verify Razorpay signature
+                try:
+                    razorpay_client.utility.verify_payment_signature({
+                        "razorpay_order_id": order.razorpay_order_id,
+                        "razorpay_payment_id": razorpay_payment_id,
+                        "razorpay_signature": razorpay_signature
+                    })
+
+                except razorpay.errors.SignatureVerificationError:
+                    return Response(
+                        {
+                            "status": "FAILED",
+                            "error": "Invalid payment signature"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 6. Fetch actual payment details from Razorpay
+                payment = razorpay_client.payment.fetch(
+                    razorpay_payment_id
+                )
+
+                # 7. Calculate expected amount in paise
+                expected_amount = int(
+                    (order.total_price * Decimal("100")).quantize(
+                        Decimal("1"),
+                        rounding=ROUND_HALF_UP
+                    )
+                )
+
+                # 8. Verify payment details
+                if payment.get("order_id") != order.razorpay_order_id:
+                    return Response(
+                        {
+                            "status": "FAILED",
+                            "error": "Payment does not belong to this order"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if payment.get("amount") != expected_amount:
+                    return Response(
+                        {
+                            "status": "FAILED",
+                            "error": "Payment amount mismatch"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if payment.get("currency") != "INR":
+                    return Response(
+                        {
+                            "status": "FAILED",
+                            "error": "Payment currency mismatch"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 9. Confirm payment is captured
+                if payment.get("status") != "captured":
+                    return Response(
+                        {
+                            "status": "FAILED",
+                            "error": "Payment is not captured yet",
+                            "payment_status": payment.get("status")
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 10. Update application order
+                order.payment_status = "SUCCESS"
+                order.razorpay_payment_id = razorpay_payment_id
+                order.payment_signature = razorpay_signature
+
+                order.save(update_fields=[
+                    "payment_status",
+                    "razorpay_payment_id",
+                    "payment_signature",
+                    "updated_at"
+                ])
+
+                return Response({
+                    "status": "SUCCESS",
+                    "message": "Payment verified successfully",
+                    "order_id": order.id,
+                    "order_code": order.order_code
+                }, status=status.HTTP_200_OK)
+
+        except Order.DoesNotExist:
+            return Response(
+                {
+                    "status": "FAILED",
+                    "error": "Order not found"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except PaymentGatewayConfig.DoesNotExist:
+            return Response(
+                {
+                    "status": "FAILED",
+                    "error": "Razorpay configuration not found"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        except Exception as error:
+            print("Payment verification error:", str(error))
+
+            return Response(
+                {
+                    "status": "FAILED",
+                    "error": "Unable to verify payment"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

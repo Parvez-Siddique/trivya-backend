@@ -54,8 +54,6 @@ class AdminLogin(APIView):
             )
 
         token_instance, token = AuthToken.objects.create(user)
-
-        # Successful login
         return Response(
             {
                 "message": "Admin login successful",

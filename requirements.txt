@@ -6,3 +6,4 @@ psycopg[binary]
 Pillow
 gunicorn
 python-dotenv
+razorpay
