@@ -120,6 +120,7 @@ class ProductDetails(models.Model):
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="product_details")
     size_variation = models.CharField(max_length=200)
     price_variation = models.DecimalField(max_digits=10,decimal_places=2, null=True, blank=True)
+    non_discounted_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     variation_image_one = models.ImageField(upload_to='productvariations/',null=True, blank=True)
     variation_image_two = models.ImageField(upload_to='productvariations/', null=True, blank=True)
     variation_image_three = models.ImageField(upload_to='productvariations/', null=True, blank=True)

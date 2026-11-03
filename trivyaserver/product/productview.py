@@ -270,6 +270,8 @@ class ProductUpdateView(APIView):
             []
         )
 
+        print(product_variation_data,"PRODUCTVARIATIONDATALIKEKEKEKEKEKEK")
+
         if isinstance(product_data, str):
             product_data = json.loads(product_data)
 
@@ -307,7 +309,6 @@ class ProductUpdateView(APIView):
 
         for variation in existing_variations:
 
-            # Delete variation image files
             if variation.variation_image_one:
                 variation.variation_image_one.delete(save=False)
 
@@ -323,17 +324,9 @@ class ProductUpdateView(APIView):
             # Delete variation record
             variation.delete()
 
-        # =================================
-        # CREATE NEW VARIATIONS
-        # =================================
-
         for index, variation in enumerate(product_variation_data):
 
             variation_number = index + 1
-
-            # --------------------------------
-            # Get variation images
-            # --------------------------------
 
             variation_image_one = request.FILES.get(
                 f"variation_{variation_number}_variation_image_one"
@@ -350,10 +343,6 @@ class ProductUpdateView(APIView):
             variation_image_four = request.FILES.get(
                 f"variation_{variation_number}_variation_image_four"
             )
-
-            # --------------------------------
-            # Create variation
-            # --------------------------------
 
             variation_serializer = CreateProductVariationSerializer(
                 data=variation
@@ -549,6 +538,7 @@ class GetCartDetails(APIView):
 
                     "size_variation": variation.size_variation,
                     "price_variation": variation.price_variation,
+                    "non_discounted_price": variation.non_discounted_price,
                 }
             )
 

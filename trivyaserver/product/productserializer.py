@@ -23,6 +23,7 @@ class ProductVariationSerializer(serializers.ModelSerializer):
             "id",
             "size_variation",
             "price_variation",
+            "non_discounted_price",
             "variation_image_one",
             "variation_image_two",
             "variation_image_three",
@@ -37,6 +38,7 @@ class CreateProductVariationSerializer(serializers.ModelSerializer):
         fields = [
             "size_variation",
             "price_variation",
+            "non_discounted_price",
             "variation_image_one",
             "variation_image_two",
             "variation_image_three",
@@ -194,6 +196,12 @@ class CartItemSerializer(serializers.Serializer):
         decimal_places=2,
         allow_null=True
     )
+
+    non_discounted_price = serializers.DecimalField(
+            max_digits=10,
+            decimal_places=2,
+            allow_null=True
+        )
 
     def get_product_image(self, obj):
         request = self.context.get("request")
